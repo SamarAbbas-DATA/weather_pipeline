@@ -48,7 +48,7 @@ def read_and_copy_csv():
 with DAG(
     dag_id="extract_weather_kaggle",
     start_date=datetime(2024, 1, 1),
-    schedule=None,   # trigger manually from UI
+    schedule=None,   # this will only trigger manually from UI
     catchup=False,
 ) as dag:
 

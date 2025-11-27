@@ -19,14 +19,10 @@ def transform_weather(ti):
     os.makedirs(base_dir, exist_ok=True)
     csv_path = os.path.join(base_dir, "weatherHistory1.csv")
 
-    # ============================
-    # 1) READ ORIGINAL DATA
-    # ============================
+   
     df = pd.read_csv(csv_path)
 
-    # ============================
     # 2) DATA CLEANING
-    # ============================
 
     # 2.1 Convert "Formatted Date" string -> proper date (YYYY-MM-DD)
     df["Date"] = pd.to_datetime(
@@ -52,9 +48,7 @@ def transform_weather(ti):
     # 2.4 Remove duplicates
     df = df.drop_duplicates()
 
-    # ============================
     # 3) WIND STRENGTH FEATURE
-    # ============================
 
     # km/h -> m/s
     df["wind_speed_ms"] = df["Wind Speed (km/h)"] / 3.6
@@ -87,14 +81,12 @@ def transform_weather(ti):
 
     df["wind_strength"] = df["wind_speed_ms"].apply(classify_speed)
 
-    # Optional: keep cleaned hourly file for debugging / validation
+    # I kept cleaned hourly file for debugging / validation
     base_dir = "datasets"
     clean_path = os.path.join(base_dir, "weatherHistory_clean.csv")
     df.to_csv(clean_path, index=False)
 
-    # ============================
     # 4) DAILY AVERAGES
-    # ============================
 
     daily_avg = df.groupby("Date", as_index=False).agg({
         "Temperature (C)": "mean",
@@ -108,7 +100,7 @@ def transform_weather(ti):
         "Wind Speed (km/h)": "avg_wind_speed_kmh",
     })
 
-    # Merge daily averages back onto each row (by Date)
+    # I had toMerge daily averages back onto each row (by Date), because the load statement wants these columns
     df_daily = df.merge(daily_avg, on="Date", how="left")
 
     # Build daily_weather-style CSV with correct column names
@@ -144,9 +136,8 @@ def transform_weather(ti):
     daily_path = os.path.join(base_dir, "weather_daily.csv")
     daily_weather.to_csv(daily_path, index=False)
 
-    # ============================
+    
     # 5) MONTHLY AGGREGATES + MODE PRECIP
-    # ============================
 
     # Group by month using Date column
     df["Month"] = df["Date"].dt.to_period("M")
@@ -177,7 +168,7 @@ def transform_weather(ti):
     # Combine averages + mode
     monthly = monthly_agg.join(monthly_precip)
 
-    # Reset index and rename columns to match "monthly_weather" spec
+     
     monthly = monthly.reset_index()
 
     monthly = monthly.rename(columns={
@@ -197,9 +188,7 @@ def transform_weather(ti):
     monthly_path = os.path.join(base_dir, "weather_monthly.csv")
     monthly.to_csv(monthly_path, index=False)
 
-    # ============================
     # 6) XCOM OUTPUT
-    # ============================
 
     ti.xcom_push(key="clean_csv_path", value=clean_path)
     ti.xcom_push(key="daily_csv_path", value=daily_path)
@@ -224,9 +213,7 @@ def validate_weather(ti):
     df_daily = pd.read_csv(daily_path)
     df_monthly = pd.read_csv(monthly_path)
 
-    # ============================
     # 1) MISSING VALUES CHECK
-    # ============================
 
     daily_critical = [
         "temperature_c",
@@ -260,9 +247,7 @@ def validate_weather(ti):
         print(missing_monthly[missing_monthly > 0])
         raise ValueError("Validation failed: missing values in critical fields.")
 
-    # ============================
     # 2) RANGE CHECKS
-    # ============================
 
     ok_temp = df_daily["temperature_c"].between(-50, 50).all() and df_daily["avg_temperature_c"].between(-50, 50).all()
     ok_hum = df_daily["humidity"].between(0, 1).all() and df_daily["avg_humidity"].between(0, 1).all()
@@ -271,9 +256,7 @@ def validate_weather(ti):
     if not (ok_temp and ok_hum and ok_wind):
         raise ValueError("Validation failed: range checks failed (temperature, humidity, or wind speed).")
 
-    # ============================
     # 3) OUTLIER DETECTION (LOG)
-    # ============================
 
     outlier_mask = (
         (df_daily["temperature_c"] < -40) |
@@ -288,9 +271,7 @@ def validate_weather(ti):
         print(f"[VALIDATION] Found {len(outliers)} temperature outliers (extreme but within global range):")
         print(outliers.head(10))
 
-    # ============================
     # 4) PUSH PATHS FOR LOAD STEP
-    # ============================
 
     ti.xcom_push(key="validated_daily_csv_path", value=daily_path)
     ti.xcom_push(key="validated_monthly_csv_path", value=monthly_path)
@@ -304,10 +285,8 @@ def load_weather(ti):
     - daily_weather table
     - monthly_weather table
     """
-    # Import inside the function to avoid DAG parse errors if package missing
     from sqlalchemy import create_engine
 
-    # Pull validated paths from XCom (from validation step)
     daily_path = ti.xcom_pull(task_ids="validate_weather", key="validated_daily_csv_path")
     monthly_path = ti.xcom_pull(task_ids="validate_weather", key="validated_monthly_csv_path")
 
@@ -321,7 +300,6 @@ def load_weather(ti):
     df_daily.insert(0, "id", range(1, len(df_daily) + 1))
     df_monthly.insert(0, "id", range(1, len(df_monthly) + 1))
 
-    # PostgreSQL connection (your config)
     user = "postgres"
     password = "yam%40110%23%23"
     host = "host.docker.internal"
@@ -332,7 +310,7 @@ def load_weather(ti):
         f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}"
     )
 
-    # Write to database tables
+
     df_daily.to_sql("daily_weather", engine, if_exists="replace", index=False)
     df_monthly.to_sql("monthly_weather", engine, if_exists="replace", index=False)
 
@@ -362,7 +340,7 @@ with DAG(
     load_task = PythonOperator(
         task_id="load_weather",
         python_callable=load_weather,
-        trigger_rule=TriggerRule.ALL_SUCCESS,  # only if validation passed
+        trigger_rule=TriggerRule.ALL_SUCCESS,  # this works only if validation task passes 
     )
 
     transform_task >> validate_task >> load_task
