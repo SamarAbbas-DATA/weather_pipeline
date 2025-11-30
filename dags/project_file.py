@@ -31,7 +31,7 @@ def transform_weather(ti):
         errors="coerce",
     )
 
-    # 2.2 Handle missing / erroneous data in critical columns
+    # 2.2 Handle missing  data in critical columns
     critical_cols = [
         "Temperature (C)",
         "Apparent Temperature (C)",
@@ -81,7 +81,7 @@ def transform_weather(ti):
 
     df["wind_strength"] = df["wind_speed_ms"].apply(classify_speed)
 
-    # I kept cleaned hourly file for debugging / validation
+    # kept cleaned hourly file for debugging / validation
     base_dir = "datasets"
     clean_path = os.path.join(base_dir, "weatherHistory_clean.csv")
     df.to_csv(clean_path, index=False)
@@ -100,7 +100,7 @@ def transform_weather(ti):
         "Wind Speed (km/h)": "avg_wind_speed_kmh",
     })
 
-    # I had toMerge daily averages back onto each row (by Date), because the load statement wants these columns
+    # had to Merge daily averages back onto each row (by Date), because the load statement wants these columns
     df_daily = df.merge(daily_avg, on="Date", how="left")
 
     # Build daily_weather-style CSV with correct column names
@@ -139,7 +139,7 @@ def transform_weather(ti):
     
     # 5) MONTHLY AGGREGATES + MODE PRECIP
 
-    # Group by month using Date column
+    # Grouping by month using Date column
     df["Month"] = df["Date"].dt.to_period("M")
 
     # Monthly averages (includes wind speed)
@@ -182,7 +182,7 @@ def transform_weather(ti):
         "Precip Type": "mode_precip_type",
     })
 
-    # Convert month from Period("2006-01") -> string "2006-01"
+    # month from Period("2006-01") -> string "2006-01"
     monthly["month"] = monthly["month"].astype(str)
 
     monthly_path = os.path.join(base_dir, "weather_monthly.csv")
@@ -234,7 +234,7 @@ def validate_weather(ti):
         "avg_humidity",
         "avg_visibility_km",
         "avg_pressure_millibars",
-        # mode_precip_type can be NaN
+        
     ]
 
     missing_daily = df_daily[daily_critical].isna().sum()
